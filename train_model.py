@@ -1,6 +1,5 @@
 
 import json
-
 import joblib
 import numpy as np
 import pandas as pd
@@ -40,9 +39,10 @@ def create_dataset():
 def train_model():
     print("Creating dataset...")
     data = create_dataset()
-    data.to_csv("student_results.csv", index=False)
 
-    print("Dataset created successfully.")
+    # Save the generated dataset
+    data.to_csv("student_results.csv", index=False)
+    print("Dataset saved as student_results.csv")
     print("Number of records:", len(data))
 
     features = [
@@ -64,7 +64,7 @@ def train_model():
     )
 
     print("Training records:", len(X_train))
-    print("Testing records :", len(X_test))
+    print("Testing records:", len(X_test))
 
     model = Pipeline([
         ("scaler", StandardScaler()),
@@ -87,19 +87,26 @@ def train_model():
     print("\nConfusion Matrix:")
     print(matrix)
 
+    # Save the trained model
     joblib.dump(model, "student_result_model.pkl")
-    print("\nModel saved as student_result_model.pkl")
+    print("Model saved as student_result_model.pkl")
 
+    # Save model evaluation metrics
     metrics = {
         "accuracy": float(accuracy),
-        "training_records": len(X_train),
-        "testing_records": len(X_test)
+        "training_records": int(len(X_train)),
+        "testing_records": int(len(X_test))
     }
 
-    with open("metrics.json", "w") as file:
+    with open("metrics.json", "w", encoding="utf-8") as file:
         json.dump(metrics, file, indent=4)
 
     print("Metrics saved as metrics.json")
+    print("\nAll three output files have been generated:")
+    print("1. student_result_model.pkl")
+    print("2. metrics.json")
+    print("3. student_results.csv")
+
     return accuracy
 
 
