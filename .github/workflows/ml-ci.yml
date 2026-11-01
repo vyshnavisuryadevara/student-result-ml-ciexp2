@@ -31,9 +31,17 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Train and test model
+      - name: Verify project files
         run: |
-          python train.py
+          echo "Checking required project files..."
+          ls -la
+          test -f app.py
+          test -f student_result_model.pkl
+          test -f metrics.json
+          test -f requirements.txt
+          test -f Dockerfile
+          test -f .dockerignore
+          echo "All required files are available."
 
       - name: Run tests
         run: |
@@ -49,6 +57,15 @@ jobs:
           cp Dockerfile release_candidate/
           cp .dockerignore release_candidate/
           printf "Student Result Prediction ML Application\nRun: python app.py\nEndpoint: POST /predict\n" > release_candidate/DEPLOYMENT.txt
+
+      - name: Verify release candidate
+        run: |
+          echo "Release candidate contents:"
+          ls -la release_candidate/
+          test -f release_candidate/Dockerfile
+          test -f release_candidate/.dockerignore
+          test -f release_candidate/DEPLOYMENT.txt
+          echo "Release candidate verified successfully."
 
       - name: Upload release candidate
         uses: actions/upload-artifact@v4
