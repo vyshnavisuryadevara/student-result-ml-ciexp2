@@ -30,18 +30,20 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
+          pip install pytest
 
-      - name: Verify project files
+      - name: Train the ML model
         run: |
-          echo "Checking required project files..."
+          python train_model.py
+
+      - name: Verify generated model files
+        run: |
+          echo "Checking generated files..."
           ls -la
-          test -f app.py
           test -f student_result_model.pkl
           test -f metrics.json
-          test -f requirements.txt
-          test -f Dockerfile
-          test -f .dockerignore
-          echo "All required files are available."
+          test -f student_results.csv
+          echo "All model files generated successfully."
 
       - name: Run tests
         run: |
@@ -60,8 +62,12 @@ jobs:
 
       - name: Verify release candidate
         run: |
-          echo "Release candidate contents:"
+          echo "Checking release candidate..."
           ls -la release_candidate/
+          test -f release_candidate/app.py
+          test -f release_candidate/student_result_model.pkl
+          test -f release_candidate/metrics.json
+          test -f release_candidate/requirements.txt
           test -f release_candidate/Dockerfile
           test -f release_candidate/.dockerignore
           test -f release_candidate/DEPLOYMENT.txt
