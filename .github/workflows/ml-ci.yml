@@ -1,13 +1,14 @@
-
 name: Student Result ML CI-CD
 
 on:
   push:
     branches:
       - main
+
   pull_request:
     branches:
       - main
+
   workflow_dispatch:
 
 permissions:
@@ -24,30 +25,25 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: '3.11'
+
+      - name: Upgrade pip
+        run: python -m pip install --upgrade pip
 
       - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install pytest
+        run: pip install -r requirements.txt
 
-      - name: Train the ML model
-        run: |
-          python train_model.py
+      - name: Train student result model
+        run: python train_model.py
 
-      - name: Verify generated model files
-        run: |
-          echo "Checking generated files..."
-          ls -la
-          test -f student_result_model.pkl
-          test -f metrics.json
-          test -f student_results.csv
-          echo "All model files generated successfully."
+      - name: Check ML quality gate
+        run: python quality_gate.py
 
-      - name: Run tests
-        run: |
-          pytest -v
+      - name: Run automated ML tests
+        run: python -m unittest test_ml_pipeline.py -v
+
+      - name: Run prediction application tests
+        run: python -m unittest test_app.py -v
 
       - name: Prepare release candidate
         run: |
@@ -60,23 +56,11 @@ jobs:
           cp .dockerignore release_candidate/
           printf "Student Result Prediction ML Application\nRun: python app.py\nEndpoint: POST /predict\n" > release_candidate/DEPLOYMENT.txt
 
-      - name: Verify release candidate
-        run: |
-          echo "Checking release candidate..."
-          ls -la release_candidate/
-          test -f release_candidate/app.py
-          test -f release_candidate/student_result_model.pkl
-          test -f release_candidate/metrics.json
-          test -f release_candidate/requirements.txt
-          test -f release_candidate/Dockerfile
-          test -f release_candidate/.dockerignore
-          test -f release_candidate/DEPLOYMENT.txt
-          echo "Release candidate verified successfully."
-
       - name: Upload release candidate
         uses: actions/upload-artifact@v4
         with:
           name: student-result-ml-release
           path: release_candidate/
           if-no-files-found: error
+          include-hidden-files: true
           retention-days: 7
