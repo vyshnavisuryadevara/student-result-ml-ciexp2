@@ -1,7 +1,8 @@
-__pycache__/
+.git
+.github
+__pycache__
 *.pyc
-.git/
-.github/
-test_*.py
-student_results.csv
-release_candidate/
+.venv
+venv
+.env
+.ipynb_checkpoints
