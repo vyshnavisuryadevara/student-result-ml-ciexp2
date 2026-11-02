@@ -1,20 +1,21 @@
 
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify
 
-# Initialize Flask application
+# Create Flask application
 app = Flask(__name__)
 
-# Home route
+
+# Home page
 @app.route("/", methods=["GET"])
 def home():
     return jsonify({
+        "message": "Student Result Prediction API",
         "status": "success",
-        "message": "Welcome to Student Result Prediction API",
         "service": "student-result-prediction"
     }), 200
 
 
-# Health check route
+# Health check
 @app.route("/health", methods=["GET"])
 def health_check():
     return jsonify({
@@ -23,20 +24,24 @@ def health_check():
     }), 200
 
 
-# API information route
+# API status
 @app.route("/api", methods=["GET"])
-def api_info():
+def api_status():
     return jsonify({
-        "project": "Student Result Prediction",
-        "framework": "Flask",
-        "message": "API is running successfully"
+        "message": "API is working properly",
+        "status": "running"
     }), 200
 
 
-# Run Flask application
+# Handle invalid URLs
+@app.errorhandler(404)
+def page_not_found(error):
+    return jsonify({
+        "status": "error",
+        "message": "Endpoint not found"
+    }), 404
+
+
+# Start application
 if __name__ == "__main__":
-    app.run(
-        host="0.0.0.0",
-        port=5000,
-        debug=True
-    )
+    app.run(host="0.0.0.0", port=5000, debug=False)
