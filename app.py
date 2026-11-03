@@ -11,7 +11,7 @@ import pandas as pd
 from flask import Flask, jsonify, request, g
 
 
-
+# STEP 1: CONFIGURE LOGGING
 
 logging.basicConfig(
     level=logging.INFO,
@@ -23,6 +23,7 @@ logging.basicConfig(
 logger = logging.getLogger("student-result-api")
 
 
+# STEP 2: CREATE FLASK APPLICATION
 
 app = Flask(__name__)
 
@@ -37,6 +38,7 @@ FEATURES = [
 ]
 
 
+# STEP 3: LOAD MACHINE LEARNING MODEL
 
 def load_model():
     if not MODEL_PATH.exists():
@@ -63,6 +65,7 @@ except Exception:
     raise
 
 
+# STEP 4: REQUEST LOGGING
 
 @app.before_request
 def before_request_logging():
@@ -107,6 +110,8 @@ def after_request_logging(response):
     return response
 
 
+# STEP 5: HOME ENDPOINT
+
 @app.route("/", methods=["GET"])
 def home():
     return jsonify({
@@ -115,6 +120,7 @@ def home():
     }), 200
 
 
+# STEP 6: HEALTH ENDPOINT
 
 @app.route("/health", methods=["GET"])
 def health():
@@ -124,14 +130,14 @@ def health():
     }), 200
 
 
-
+# STEP 7: PREDICTION ENDPOINT
 
 @app.route("/predict", methods=["POST"])
 def predict():
 
     data = request.get_json(silent=True)
 
-    
+    # Validate JSON request
     if not isinstance(data, dict):
         logger.warning(
             "event=validation_error reason=invalid_json"
@@ -141,7 +147,7 @@ def predict():
             "error": "Request body must be a valid JSON object"
         }), 400
 
-    
+    # Check required fields
     missing_fields = [
         field for field in FEATURES
         if field not in data
@@ -158,7 +164,7 @@ def predict():
             "missing_fields": missing_fields
         }), 400
 
-    
+    # Validate numeric values
     input_data = {}
 
     for field in FEATURES:
@@ -194,7 +200,7 @@ def predict():
 
         prediction = model.predict(input_df)[0]
 
-        
+        # Convert model output to PASS or FAIL
         if str(prediction).strip().upper() in ["1", "1.0", "PASS"]:
             result = "PASS"
             prediction_code = 1
@@ -229,7 +235,7 @@ def predict():
         }), 500
 
 
-
+# STEP 8: HANDLE UNKNOWN ROUTES
 
 @app.errorhandler(404)
 def not_found(error):
@@ -243,7 +249,7 @@ def not_found(error):
     }), 404
 
 
-
+# STEP 9: START APPLICATION
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
