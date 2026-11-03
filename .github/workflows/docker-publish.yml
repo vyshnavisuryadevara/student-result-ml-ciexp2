@@ -29,16 +29,17 @@ jobs:
         run: |
           docker run -d \
             --name student-result-ci \
-            -p 8000:8000 \
+            -p 8000:5000 \
             $IMAGE_NAME:ci
 
       - name: Test API health endpoint
         run: |
-          for attempt in {1..20}; do
-            if curl --fail --silent http://localhost:8000/health; then
+          for attempt in {1..30}; do
+            if curl --fail --silent http://localhost:8000/; then
               echo "Health check passed."
               exit 0
             fi
+
             echo "Waiting for API..."
             sleep 3
           done
