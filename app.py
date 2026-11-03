@@ -8,7 +8,15 @@ from pathlib import Path
 
 import joblib
 import pandas as pd
-from flask import Flask, jsonify, request, g
+from flask import Flask, jsonify, request, g, Response
+
+from prometheus_client import (
+    Counter,
+    Histogram,
+    Gauge,
+    generate_latest,
+    CONTENT_TYPE_LATEST
+)
 
 
 # STEP 1: CONFIGURE LOGGING
@@ -38,7 +46,39 @@ FEATURES = [
 ]
 
 
-# STEP 3: LOAD MACHINE LEARNING MODEL
+# STEP 3: CONFIGURE PROMETHEUS METRICS
+
+# Counts HTTP requests by method, endpoint and response status.
+HTTP_REQUESTS = Counter(
+    "http_requests",
+    "Total number of HTTP requests",
+    ["method", "endpoint", "status"]
+)
+
+# Measures HTTP request processing time in seconds.
+HTTP_REQUEST_DURATION = Histogram(
+    "http_request_duration_seconds",
+    "HTTP request processing duration in seconds",
+    ["method", "endpoint"]
+)
+
+# Counts successful and failed prediction operations.
+PREDICTIONS = Counter(
+    "predictions",
+    "Total number of successful and failed predictions",
+    ["outcome", "result"]
+)
+
+# Shows whether the ML model loaded successfully.
+MODEL_LOADED = Gauge(
+    "model_loaded",
+    "Whether the machine learning model is loaded (1=yes, 0=no)"
+)
+
+MODEL_LOADED.set(0)
+
+
+# STEP 4: LOAD MACHINE LEARNING MODEL
 
 def load_model():
     if not MODEL_PATH.exists():
@@ -52,12 +92,16 @@ def load_model():
 try:
     model = load_model()
 
+    MODEL_LOADED.set(1)
+
     logger.info(
         "event=model_loaded model_file=%s",
         MODEL_PATH.name
     )
 
 except Exception:
+    MODEL_LOADED.set(0)
+
     logger.exception(
         "event=model_load_failed model_file=%s",
         MODEL_PATH.name
@@ -65,7 +109,7 @@ except Exception:
     raise
 
 
-# STEP 4: REQUEST LOGGING
+# STEP 5: REQUEST LOGGING AND HTTP METRICS
 
 @app.before_request
 def before_request_logging():
@@ -79,9 +123,12 @@ def before_request_logging():
 
 @app.after_request
 def after_request_logging(response):
-    duration_ms = (
+
+    duration_seconds = (
         time.perf_counter() - g.start_time
-    ) * 1000
+    )
+
+    duration_ms = duration_seconds * 1000
 
     request_id = getattr(
         g,
@@ -90,6 +137,25 @@ def after_request_logging(response):
     )
 
     response.headers["X-Request-ID"] = request_id
+
+    # Use the Flask route rule to avoid recording arbitrary URL values.
+    endpoint = (
+        request.url_rule.rule
+        if request.url_rule is not None
+        else "unmatched"
+    )
+
+    # Record HTTP request count and response time.
+    HTTP_REQUESTS.labels(
+        method=request.method,
+        endpoint=endpoint,
+        status=str(response.status_code)
+    ).inc()
+
+    HTTP_REQUEST_DURATION.labels(
+        method=request.method,
+        endpoint=endpoint
+    ).observe(duration_seconds)
 
     level = (
         logging.WARNING
@@ -110,7 +176,7 @@ def after_request_logging(response):
     return response
 
 
-# STEP 5: HOME ENDPOINT
+# STEP 6: HOME ENDPOINT
 
 @app.route("/", methods=["GET"])
 def home():
@@ -120,7 +186,7 @@ def home():
     }), 200
 
 
-# STEP 6: HEALTH ENDPOINT
+# STEP 7: HEALTH ENDPOINT
 
 @app.route("/health", methods=["GET"])
 def health():
@@ -130,7 +196,17 @@ def health():
     }), 200
 
 
-# STEP 7: PREDICTION ENDPOINT
+# STEP 8: PROMETHEUS METRICS ENDPOINT
+
+@app.route("/metrics", methods=["GET"])
+def metrics():
+    return Response(
+        generate_latest(),
+        mimetype=CONTENT_TYPE_LATEST
+    )
+
+
+# STEP 9: PREDICTION ENDPOINT
 
 @app.route("/predict", methods=["POST"])
 def predict():
@@ -139,6 +215,11 @@ def predict():
 
     # Validate JSON request
     if not isinstance(data, dict):
+        PREDICTIONS.labels(
+            outcome="failure",
+            result="none"
+        ).inc()
+
         logger.warning(
             "event=validation_error reason=invalid_json"
         )
@@ -154,6 +235,11 @@ def predict():
     ]
 
     if missing_fields:
+        PREDICTIONS.labels(
+            outcome="failure",
+            result="none"
+        ).inc()
+
         logger.warning(
             "event=validation_error missing_fields=%s",
             missing_fields
@@ -175,6 +261,11 @@ def predict():
             or not isinstance(value, (int, float))
             or not 0 <= value <= 100
         ):
+            PREDICTIONS.labels(
+                outcome="failure",
+                result="none"
+            ).inc()
+
             logger.warning(
                 "event=validation_error field=%s reason=invalid_numeric_value",
                 field
@@ -214,6 +305,12 @@ def predict():
                 "Unexpected prediction output from model"
             )
 
+        # Record successful prediction.
+        PREDICTIONS.labels(
+            outcome="success",
+            result=result
+        ).inc()
+
         logger.info(
             "event=prediction_success prediction=%s",
             result
@@ -225,6 +322,12 @@ def predict():
         }), 200
 
     except Exception:
+        # Record failed prediction.
+        PREDICTIONS.labels(
+            outcome="failure",
+            result="none"
+        ).inc()
+
         logger.exception(
             "event=prediction_failed request_id=%s",
             getattr(g, "request_id", "unknown")
@@ -235,7 +338,7 @@ def predict():
         }), 500
 
 
-# STEP 8: HANDLE UNKNOWN ROUTES
+# STEP 10: HANDLE UNKNOWN ROUTES
 
 @app.errorhandler(404)
 def not_found(error):
@@ -249,7 +352,7 @@ def not_found(error):
     }), 404
 
 
-# STEP 9: START APPLICATION
+# STEP 11: START APPLICATION
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
